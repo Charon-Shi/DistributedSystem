@@ -2,6 +2,10 @@ package mapreduce
 
 import (
 	"hash/fnv"
+	"io/ioutil"
+	"os"
+	"encoding/json"
+	"fmt"
 )
 
 // doMap does the job of a map worker: it reads one of the input files
@@ -40,6 +44,40 @@ func doMap(
 	//     err := enc.Encode(&kv)
 	//
 	// Remember to close the file after you have written all the values!
+
+	dat, errInput := ioutil.ReadFile(inFile)
+	checkFile(errInput)
+
+	outFiles := make([]*os.File, nReduce)
+	encoders := make([]*json.Encoder, nReduce)
+
+	for i := range outFiles {
+		var errOutput error
+		filename := reduceName(jobName, mapTaskNumber, i)
+		outFiles[i], errOutput = os.Create(filename)
+		checkFile(errOutput)
+
+		encoders[i] = json.NewEncoder(outFiles[i])
+
+		fmt.Printf("MapTask %d generate %s\n", mapTaskNumber, filename)
+	}
+
+	mapRes := mapF(inFile, string(dat))
+
+	for _, kv := range mapRes {
+		index := int(ihash(kv.Key)) % nReduce
+		encoders[index].Encode(&kv)
+	}
+
+	for _, file := range outFiles {
+		file.Close()
+	}
+}
+
+func checkFile(e error) {
+	if(e != nil) {
+		panic(e)
+	}
 }
 
 func ihash(s string) uint32 {

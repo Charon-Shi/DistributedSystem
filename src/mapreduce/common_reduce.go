@@ -1,5 +1,11 @@
 package mapreduce
 
+import (
+	"os"
+	"encoding/json"
+	"fmt"
+)
+
 // doReduce does the job of a reduce worker: it reads the intermediate
 // key/value pairs (produced by the map phase) for this task, sorts the
 // intermediate key/value pairs by key, calls the user-defined reduce function
@@ -31,4 +37,57 @@ func doReduce(
 	// 	enc.Encode(KeyValue{key, reduceF(...)})
 	// }
 	// file.Close()
+
+	// Dict for kv from all intermediate files
+	// Map[1]["123"] = "1" means that in the first
+	// intermediate file, key "123" has value  "1"
+	temDict := make(map[string][]string)
+
+	// Prepare input file/Decoder for json/output file
+	inFiles := make([]*os.File, nMap)
+	Decoders := make([]*json.Decoder, nMap)
+	outFile, err := os.Create(mergeName(jobName, reduceTaskNumber))
+	checkFile(err)
+	Encoder := json.NewEncoder(outFile)
+
+
+	// Group input files
+	for i := range inFiles {
+		var err error
+		var kv KeyValue
+
+		filename := reduceName(jobName, i, reduceTaskNumber)
+		inFiles[i], err = os.Open(filename)
+		checkFile(err)
+
+		fmt.Printf("This is reduceTask %d, try to read file %s\n", reduceTaskNumber, filename)
+
+		Decoders[i] = json.NewDecoder(inFiles[i])
+		for  {
+
+			if err = Decoders[i].Decode(&kv); nil == err {
+				//fmt.Printf("Key/Value:  <%s, %s>\n", kv.Key, kv.Value)
+
+				if _, ok := temDict[kv.Key]; !ok {
+					temDict[kv.Key] = make([]string, 0)
+				}
+
+				temDict[kv.Key] = append(temDict[kv.Key], kv.Value)
+
+				//j := len(temDict[kv.Key])
+				//fmt.Printf("temDict[%s][%d] = %s\n", kv.Key, j-1, temDict[kv.Key][j-1])
+			} else {
+				break
+			}
+
+		}
+		inFiles[i].Close()
+	}
+
+	//Group key/value
+	for key := range temDict {
+		totalValue := reduceF(key, temDict[key])
+		Encoder.Encode(KeyValue{key, totalValue})
+	}
+	outFile.Close()
 }
