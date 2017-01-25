@@ -17,6 +17,10 @@ func (mr *Master) schedule(phase jobPhase) {
 			go mr.processMap(mapDone, i)
 		}
 
+		//wait until all map are done
+		for i := 0; i < ntasks; i++ {
+			<-mapDone
+		}
 	case reducePhase:
 		ntasks = mr.nReduce
 		nios = len(mr.files)
@@ -24,6 +28,11 @@ func (mr *Master) schedule(phase jobPhase) {
 
 		for i := 0; i < ntasks; i++ {
 			go mr.processReduce(reduceDone, i)
+		}
+
+		//wait until all map are done
+		for i := 0; i < ntasks; i++ {
+			<-reduceDone
 		}
 	}
 
