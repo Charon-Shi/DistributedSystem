@@ -5,7 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 	"encoding/json"
-	"fmt"
+	//"fmt"
 )
 
 // doMap does the job of a map worker: it reads one of the input files
@@ -58,8 +58,7 @@ func doMap(
 		checkFile(errOutput)
 
 		encoders[i] = json.NewEncoder(outFiles[i])
-
-		fmt.Printf("MapTask %d generate %s\n", mapTaskNumber, filename)
+		//fmt.Printf("MapTask %d generate %s\n", mapTaskNumber, filename)
 	}
 
 	mapRes := mapF(inFile, string(dat))

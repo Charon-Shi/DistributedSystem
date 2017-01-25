@@ -3,7 +3,7 @@ package mapreduce
 import (
 	"os"
 	"encoding/json"
-	"fmt"
+	//"fmt"
 )
 
 // doReduce does the job of a reduce worker: it reads the intermediate
@@ -59,21 +59,18 @@ func doReduce(
 		filename := reduceName(jobName, i, reduceTaskNumber)
 		inFiles[i], err = os.Open(filename)
 		checkFile(err)
-
-		fmt.Printf("This is reduceTask %d, try to read file %s\n", reduceTaskNumber, filename)
+		//fmt.Printf("This is reduceTask %d, try to read file %s\n", reduceTaskNumber, filename)
 
 		Decoders[i] = json.NewDecoder(inFiles[i])
 		for  {
 
 			if err = Decoders[i].Decode(&kv); nil == err {
 				//fmt.Printf("Key/Value:  <%s, %s>\n", kv.Key, kv.Value)
-
 				if _, ok := temDict[kv.Key]; !ok {
 					temDict[kv.Key] = make([]string, 0)
 				}
 
 				temDict[kv.Key] = append(temDict[kv.Key], kv.Value)
-
 				//j := len(temDict[kv.Key])
 				//fmt.Printf("temDict[%s][%d] = %s\n", kv.Key, j-1, temDict[kv.Key][j-1])
 			} else {
