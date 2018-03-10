@@ -27,6 +27,12 @@ type ViewServer struct {
 	backupMissingTick uint
 }
 
+func (vs *ViewServer) incView() {
+	vs.currentView.Viewnum++
+	vs.isPrimaryAcked = false
+}
+
+
 //
 // server Ping RPC handler.
 //
@@ -38,16 +44,13 @@ func (vs *ViewServer) Ping(args *PingArgs, reply *PingReply) error {
 
 	// First ping from the client machine or Second ping from client
 	if vs.currentView.Primary == "" && vs.currentView.Viewnum == 0 {
-		vs.currentView.Viewnum++
 		vs.currentView.Primary = args.Me
 		vs.currentView.Backup = ""
 		vs.primaryMissingTick = 0
-		vs.isPrimaryAcked = false
-
-		reply.View = vs.currentView
+		vs.incView()
 	}
 
-	// When view is same and not first time, update missingTick
+	// Normal case: when view is same and not first time, update missingTick
 	if vs.currentView.Viewnum == args.Viewnum {
 		if vs.currentView.Primary == args.Me {
 			// When primary is acked
@@ -58,26 +61,16 @@ func (vs *ViewServer) Ping(args *PingArgs, reply *PingReply) error {
 		if vs.currentView.Backup == args.Me {
 			vs.backupMissingTick = 0
 		}
-
-		reply.View = vs.currentView
 	}
 
-	if vs.currentView.Viewnum > args.Viewnum {
+	if vs.currentView.Viewnum > args.Viewnum && vs.isPrimaryAcked {
 		// If there is no backup in current view, promote idle server to backup
 		if vs.currentView.Primary != args.Me && vs.currentView.Backup == "" {
-			vs.currentView.Viewnum++
 			vs.currentView.Backup = args.Me
-			vs.primaryMissingTick = 0
+			vs.incView()
 		}
-
-		// Backup server got promoted
-		if vs.currentView.Primary == args.Me && vs.primaryMissingTick >= DeadPings {
-			vs.primaryMissingTick = 0
-			vs.isPrimaryAcked = false
-		}
-
-		reply.View = vs.currentView
 	}
+	reply.View = vs.currentView
 
 	return nil
 }
@@ -110,13 +103,18 @@ func (vs *ViewServer) tick() {
 	vs.primaryMissingTick++
 	vs.backupMissingTick++
 
+	// TODO: What if primary and backup go down at the same time?
 	if vs.primaryMissingTick >= DeadPings && vs.isPrimaryAcked {
-		vs.currentView.Viewnum++
 		vs.currentView.Primary = vs.currentView.Backup
+		vs.primaryMissingTick = vs.backupMissingTick
 		vs.currentView.Backup = ""
-	} else if vs.backupMissingTick >= DeadPings && vs.isPrimaryAcked {
-		vs.currentView.Viewnum++
+		vs.incView()
+	}
+
+	if vs.backupMissingTick >= DeadPings && vs.isPrimaryAcked {
 		vs.currentView.Backup = ""
+		vs.backupMissingTick = 0
+		vs.incView()
 	}
 }
 
