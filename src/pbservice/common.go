@@ -13,6 +13,7 @@ type PutAppendArgs struct {
 	Key   string
 	Value string
 	// You'll have to add definitions here.
+	OpCode string
 
 	// Field names must start with capital letters,
 	// otherwise RPC will break.
@@ -34,3 +35,10 @@ type GetReply struct {
 
 
 // Your RPC definitions here.
+type CopyDBArgs struct {
+	database map[string] string
+}
+
+type CopyDBReply struct {
+	Err   Err
+}

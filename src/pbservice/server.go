@@ -22,12 +22,16 @@ type PBServer struct {
 	me         string
 	vs         *viewservice.Clerk
 	// Your declarations here.
+
+	myview     viewservice.View    // View of this server
+	database map[string] string
 }
 
 
 func (pb *PBServer) Get(args *GetArgs, reply *GetReply) error {
 
 	// Your code here.
+
 
 	return nil
 }
@@ -37,10 +41,21 @@ func (pb *PBServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) error 
 
 	// Your code here.
 
-
 	return nil
 }
 
+func (pb *PBServer) copyDatabase(args *CopyDBArgs, reply *CopyDBReply) error {
+	pb.mu.Lock()
+	defer pb.mu.Unlock()
+
+	pb.database = make(map[string]string)
+
+	for key, value := range args.database {
+		pb.database[key] = value
+	}
+
+	return nil
+}
 
 //
 // ping the viewserver periodically.
@@ -51,6 +66,23 @@ func (pb *PBServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) error 
 func (pb *PBServer) tick() {
 
 	// Your code here.
+	pb.mu.Lock()
+	defer pb.mu.Unlock()
+
+	oldView := pb.myview
+	pb.myview, _ = pb.vs.Ping(pb.myview.Viewnum)
+
+
+	//fmt.Print("tick error from server  ")
+
+	// Transfer data if needed
+	if pb.myview.Viewnum > oldView.Viewnum {
+		args := &CopyDBArgs{}
+		args.database = pb.database
+		reply := &CopyDBReply{}
+
+		_ := call(pb.myview.Primary, "PBServer.copyDatabase", args, reply)
+	}
 }
 
 // tell the server to shut itself down.
@@ -84,6 +116,10 @@ func StartServer(vshost string, me string) *PBServer {
 	pb.me = me
 	pb.vs = viewservice.MakeClerk(me, vshost)
 	// Your pb.* initializations here.
+	pb.myview.Primary = ""
+	pb.myview.Backup = ""
+	pb.myview.Viewnum = 0
+	pb.database = map[string]string{}
 
 	rpcs := rpc.NewServer()
 	rpcs.Register(pb)

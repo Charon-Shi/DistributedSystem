@@ -11,6 +11,9 @@ import "math/big"
 type Clerk struct {
 	vs *viewservice.Clerk
 	// Your declarations here
+
+	currentView viewservice.View    // current View of Clerk
+	me string
 }
 
 // this may come in handy.
@@ -25,10 +28,22 @@ func MakeClerk(vshost string, me string) *Clerk {
 	ck := new(Clerk)
 	ck.vs = viewservice.MakeClerk(me, vshost)
 	// Your ck.* initializations here
+	ck.me = me
+	ck.PingViewServer(0)
 
 	return ck
 }
 
+func (ck *Clerk)PingViewServer(viewNum uint)  {
+	args := &viewservice.PingArgs{}
+	args.Viewnum = viewNum
+	args.Me = ck.me
+	reply := &viewservice.PingReply{}
+
+	_ := call(ck.vs.Primary(), "ViewServer.Ping", args, reply)
+
+	ck.currentView = reply.View
+}
 
 //
 // call() sends an RPC to the rpcname handler on server srv
@@ -74,8 +89,20 @@ func call(srv string, rpcname string,
 func (ck *Clerk) Get(key string) string {
 
 	// Your code here.
+	args := &GetArgs{}
+	reply := &GetReply{}
 
-	return "???"
+	for {
+		_ := call(ck.currentView.Primary, "PBServer.Get", args, &reply)
+		if reply.Err == ErrNoKey {
+			return ""
+		}
+
+		if reply.Err == ErrWrongServer {
+			ck.PingViewServer(ck.currentView.Viewnum)
+		}
+	}
+	return reply.Value
 }
 
 //
@@ -84,6 +111,21 @@ func (ck *Clerk) Get(key string) string {
 func (ck *Clerk) PutAppend(key string, value string, op string) {
 
 	// Your code here.
+	args := &PutAppendArgs{}
+	args.OpCode = op
+	args.Key = key
+	args.Value = value
+
+	reply := &PutAppendReply{}
+
+	for {
+		_ := call(ck.currentView.Primary, "PBServer."+op, args, &reply)
+		if reply.Err == ErrWrongServer {
+			ck.PingViewServer(ck.currentView.Viewnum)
+		} else {
+			return
+		}
+	}
 }
 
 //
